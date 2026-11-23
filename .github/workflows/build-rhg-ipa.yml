@@ -67,6 +67,7 @@ jobs:
 
       - name: Build the IPA
         run: |
+          mkdir -p out
           .venv/bin/python scripts/build_ipa_from_nsp.py game \
             -k keys/prod.keys \
             --platform ios \
