@@ -1,0 +1,88 @@
+name: Build Rhythm Heaven Groove IPA
+
+on:
+  workflow_dispatch:
+    inputs:
+      language:
+        description: Game language code
+        required: false
+        default: en
+
+jobs:
+  ipa:
+    runs-on: xcode-27
+    timeout-minutes: 300
+    env:
+      XCODE_APP: /Applications/Xcode_27.2.app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Disk before
+        run: df -h /
+
+      # Standard arm64 runners ship a 14 GB disk with three Xcode installs and
+      # every simulator runtime. Drop what this build does not use.
+      - name: Free disk
+        run: |
+          sudo rm -rf /Applications/Xcode_27.app /Applications/Xcode_27.0.0.app \
+                      /Applications/Xcode_27.0.app /Applications/Xcode_27.1.app \
+                      /Applications/Xcode_27.1.0.app || true
+          sudo rm -rf /Library/Developer/CoreSimulator/Profiles/Runtimes/* || true
+          sudo rm -rf ~/Library/Developer/CoreSimulator/Caches/* || true
+          df -h /
+
+      - name: Select Xcode 27.2
+        run: |
+          sudo xcode-select -s "$XCODE_APP"
+          xcodebuild -version
+
+      - name: Homebrew tools
+        run: brew install xcodegen zstd glslang
+
+      - name: Metal toolchain
+        run: sudo xcodebuild -downloadComponent MetalToolchain
+
+      - name: Python environment
+        run: |
+          python3 -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/python -m pip install lz4 "capstone>=5,<6" fonttools nsz zbic
+
+      - name: Fetch build inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p inputs
+          gh release download game -R "$GITHUB_REPOSITORY" -D inputs
+          ls -l inputs
+
+      - name: Unpack the game
+        run: |
+          mkdir -p game keys
+          7z x inputs/rhg.7z.001 -ogame -y
+          cp inputs/prod.keys keys/prod.keys
+          ls -l game
+          df -h /
+
+      - name: Build the IPA
+        run: |
+          .venv/bin/python scripts/build_ipa_from_nsp.py game \
+            -k keys/prod.keys \
+            --platform ios \
+            --language "${{ inputs.language }}" \
+            --progress lines \
+            -o out/RhythmHeavenGroove.ipa
+
+      - name: Report
+        if: always()
+        run: |
+          df -h /
+          ls -lh out || true
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: RhythmHeavenGroove-ipa
+          path: out/*.ipa
+          if-no-files-found: warn
+          compression-level: 0
