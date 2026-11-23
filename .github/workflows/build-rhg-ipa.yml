@@ -53,13 +53,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p inputs
-          gh release download game -R "$GITHUB_REPOSITORY" -D inputs
+          gh release download game -R "$GITHUB_REPOSITORY" -D inputs \
+            --pattern 'rhg-nsz.7z.*' --pattern 'prod.keys'
           ls -l inputs
 
       - name: Unpack the game
         run: |
           mkdir -p game keys
-          7z x inputs/rhg.7z.001 -ogame -y
+          7z x inputs/rhg-nsz.7z.001 -ogame -y
           cp inputs/prod.keys keys/prod.keys
           ls -l game
           df -h /
